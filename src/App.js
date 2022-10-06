@@ -1,17 +1,76 @@
-import { lineString } from "@turf/helpers";
+import area from "@turf/area";
+import bbox from "@turf/bbox";
+import center from "@turf/center";
+import { lineString, points, polygon } from "@turf/helpers";
 import lineDistanceFunc from "@turf/line-distance";
 import mapboxgl from "mapbox-gl";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { polygonHaNoi } from "./polygon";
 import "./App.css";
+import { locationUserState } from "./recoil/locationUserState";
+import { useRecoilState } from "recoil";
 
 function App() {
+  const [currentLocation, setCurrentLocation] = useState([]);
+  const [currentPolygon, setCurrentPolygon] = useState([]);
+  const [currenMarker, setCurrenMarker] = useState(null);
+  const [mapbox, setMapbox] = useState(null);
   const positions = [
     [105.5929313, 20.9624033],
     [105.7724469, 21.0030936],
   ];
-  const line = lineString(positions);
-  const distance = lineDistanceFunc(line);
-  console.log(distance);
+
+  const [locationUser, setLocationUser] = useRecoilState(locationUserState);
+  // const areas = useMemo(() => {
+  //   if (currentLocation.length > 0) {
+  //     const polygons = polygon([
+  //       [...positions, currentLocation, [105.6527176, 20.981686]],
+  //     ]);
+  //     const areas = area(polygons);
+  //     return areas;
+  //   }
+  // }, [currentLocation.length]);
+
+  // console.log(areas);
+
+  const centerLocations = useMemo(() => {
+    if (currentLocation.length > 0) {
+      const features = points([...positions, currentLocation]);
+
+      return center(features);
+    }
+  }, [currentLocation.length]);
+
+  const distance = useMemo(() => {
+    const distance = [];
+    if (currentLocation.length > 0) {
+      const lineFromMyHomeToPitch = lineString(positions);
+      const lineFromMyHomeToCurrentPosition = lineString([
+        positions[0],
+        currentLocation,
+      ]);
+      const lineFromCurrentPositionToPitch = lineString([
+        positions[1],
+        currentLocation,
+      ]);
+      const distanceFromMyHomeToPitch = lineDistanceFunc(
+        lineFromMyHomeToPitch
+      ).toFixed(0);
+      const distanceFromMyHomeToCurrentPosition = lineDistanceFunc(
+        lineFromMyHomeToCurrentPosition
+      ).toFixed(0);
+      const distanceFromCurrentPositionToPitch = lineDistanceFunc(
+        lineFromCurrentPositionToPitch
+      ).toFixed(0);
+      distance.push(
+        distanceFromMyHomeToPitch,
+        distanceFromMyHomeToCurrentPosition,
+        distanceFromCurrentPositionToPitch
+      );
+    }
+    return distance;
+  }, [currentLocation.length]);
+
   const mapContainer = useRef(null);
   const geojson = {
     type: "FeatureCollection",
@@ -30,7 +89,7 @@ function App() {
         type: "Feature",
         geometry: {
           type: "Point",
-          coordinates: [105.7724469, 21.0030936],
+          coordinates: [105.7724522, 21.0030986],
         },
         properties: {
           title: "san bong me tri",
@@ -43,48 +102,125 @@ function App() {
       "pk.eyJ1IjoidGhhbmhudDgiLCJhIjoiY2w4dG52bDQ1MDM3YzNwbXdycnAxMDdxNSJ9.1RVa2m_pTz1_tZ-pqw6gnA";
     const map = new mapboxgl.Map({
       container: mapContainer.current,
-      // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
       style: "mapbox://styles/mapbox/streets-v11",
-      center: [-98, 38.88],
-      minZoom: 2,
-      zoom: 3,
+      center: [0, 0],
+      zoom: 2,
     });
 
-    map.on("load", () => {
-      // Add a custom vector tileset source. The tileset used in
-      // this example contains a feature for every county in the U.S.
-      // Each county contains four properties. For example:
-      // {
-      //     COUNTY: "Uintah County",
-      //     FIPS: 49047,
-      //     median-income: 62363,
-      //     population: 34576
-      // }
-      map.addSource("counties", {
-        type: "vector",
-        url: "mapbox://mapbox.82pkq93d",
-      });
+    const geolocate = new mapboxgl.GeolocateControl({
+      positionOptions: {
+        enableHighAccuracy: true,
+      },
+      trackUserLocation: true,
+      showUserHeading: true,
+    });
+    map.addControl(geolocate);
 
-      map.addLayer(
-        {
-          id: "counties",
-          type: "fill",
-          source: "counties",
-          "source-layer": "original",
-          paint: {
-            "fill-outline-color": "rgba(0,0,0,0.1)",
-            "fill-color": "rgba(0,0,0,0.1)",
+    map.on("load", function () {
+      map.addSource("maine", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          geometry: {
+            type: "Polygon",
+            coordinates: [polygonHaNoi],
           },
         },
-        "settlement-label"
-      ); // Place polygon under these labels.
+      });
+      map.addLayer({
+        id: "outline",
+        type: "line",
+        source: "maine",
+        layout: {},
+        paint: {
+          "line-color": "#000",
+          "line-width": 3,
+        },
+      });
+      const geojson = {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: positions,
+              },
+              properties: {
+                title: distance[0],
+              },
+            },
+            {
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: [positions[0], currentLocation],
+              },
+              properties: {
+                title: distance[1],
+              },
+            },
+            {
+              type: "Feature",
+              geometry: {
+                type: "LineString",
+                coordinates: [positions[1], currentLocation],
+              },
+              properties: {
+                title: distance[2],
+              },
+            },
+          ],
+        },
+      };
+
+      map.addSource("my-line", geojson);
+
+      map.addLayer({
+        id: "route",
+        type: "line",
+        source: "my-line",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "lightgreen",
+          "line-width": 8,
+        },
+      });
+
+      map.addLayer({
+        id: "symbols",
+        type: "symbol",
+        source: "my-line",
+        layout: {
+          "symbol-placement": "line",
+          "text-font": ["Open Sans Regular"],
+          "text-field": "{title}",
+          "text-size": 20,
+        },
+      });
+      // map.addLayer(
+      //   {
+      //     id: "maine",
+      //     type: "fill",
+      //     source: "maine",
+      //     paint: {
+      //       "fill-outline-color": "rgba(0,0,0,0.1)",
+      //       "fill-color": "rgba(0,0,0,0.1)",
+      //     },
+      //   },
+      //   "settlement-label"
+      // ); // Place polygon under these labels.
 
       // map.addLayer(
       //   {
-      //     id: "counties-highlighted",
+      //     id: "maine-highlighted",
       //     type: "fill",
-      //     source: "counties",
-      //     "source-layer": "original",
+      //     source: "maine",
       //     paint: {
       //       "fill-outline-color": "#484896",
       //       "fill-color": "#6e599f",
@@ -95,146 +231,121 @@ function App() {
       //   "settlement-label"
       // ); // Place polygon under these labels.
 
-      map.on("click", (e) => {
-        // Set `bbox` as 5px reactangle area around clicked point.
-        const bbox = [
-          [e.point.x - 5, e.point.y - 5],
-          [e.point.x + 5, e.point.y + 5],
-        ];
-        // Find features intersecting the bounding box.
-        const selectedFeatures = map.queryRenderedFeatures(bbox, {
-          layers: ["counties"],
+      // map.on("click", (e) => {
+      //   // Set `bbox` as 5px reactangle area around clicked point.
+      //   const bbox = [
+      //     [e.point.x - 5, e.point.y - 5],
+      //     [e.point.x + 5, e.point.y + 5],
+      //   ];
+      //   // Find features intersecting the bounding box.
+      //   const selectedFeatures = map.queryRenderedFeatures(bbox, {
+      //     layers: ["maine"],
+      //   });
+      //   const fips = selectedFeatures.map((feature) => feature.properties.FIPS);
+      //   // Set a filter matching selected features by FIPS codes
+      //   // to activate the 'maine-highlighted' layer.
+      //   map.setFilter("maine-highlighted", ["in", "FIPS", ...fips]);
+      // });
+      map.on("click", function (e) {
+        const features = map.queryRenderedFeatures(e.point);
+
+        const marker = new mapboxgl.Marker({ color: "red" })
+          .setLngLat([e.lngLat.lng, e.lngLat.lat])
+          .addTo(map);
+        setCurrenMarker(marker);
+        console.log(currenMarker);
+        if (currenMarker) {
+          currenMarker.remove();
+        }
+        setLocationUser({
+          lng: e.lngLat.lng,
+          lat: e.lngLat.lat,
         });
-        const fips = selectedFeatures.map((feature) => feature.properties.FIPS);
-        // Set a filter matching selected features by FIPS codes
-        // to activate the 'counties-highlighted' layer.
-        map.setFilter("counties-highlighted", ["in", "FIPS", ...fips]);
+
+        if (map.getLayer("layer-outline")) {
+          map.removeLayer("layer-outline");
+        }
+        if (map.getSource("area")) {
+          map.removeSource("area");
+        }
+        if (features.length > 0) {
+          setCurrentPolygon(features[0].geometry.coordinates);
+        }
       });
     });
-    // const map = new mapboxgl.Map({
-    //   container: mapContainer.current, // container ID
-    //   // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
-    //   style: "mapbox://styles/mapbox/streets-v11", // style URL
-    //   center: [-24, 42], // starting center in [lng, lat]
-    //   zoom: 5, // starting zoom
-    //   projection: "globe", // display map as a 3D globe
-    // });
 
-    // map.on("style.load", () => {
-    //   map.setFog({}); // Set the default atmosphere style
-    // });
+    if (centerLocations) {
+      const el = document.createElement("div");
+      el.className = "marker";
+      const marker = new mapboxgl.Marker(el)
+        .setLngLat(centerLocations.geometry.coordinates)
+        .addTo(map);
+    }
 
-    // map.on("load", () => {
-    //   // map.addSource("my-data", {
-    //   //   type: "geojson",
-    //   //   data: {
-    //   //     type: "Feature",
-    //   //     geometry: {
-    //   //       type: "Point",
-    //   //       coordinates: [105.7724469, 21.0030936],
-    //   //     },
-    //   //     properties: {
-    //   //       title: "Mapbox DC",
-    //   //       "marker-symbol": "monument",
-    //   //     },
-    //   //   },
-    //   // });
-    //   // map.addSource("route", geojson);
-    //   // map.addLayer({
-    //   //   id: "route",
-    //   //   type: "line",
-    //   //   source: "route",
-    //   //   layout: {
-    //   //     "line-join": "round",
-    //   //     "line-cap": "round",
-    //   //   },
-    //   //   paint: {
-    //   //     "line-color": "lightgreen",
-    //   //     "line-width": 8,
-    //   //   },
-    //   // });
+    for (const feature of geojson.features) {
+      const el = document.createElement("div");
+      el.className = "marker";
+      new mapboxgl.Marker(el)
+        .setLngLat(feature.geometry.coordinates)
+        .addTo(map);
+    }
+    setMapbox(map);
+  }, [currentLocation.length]);
 
-    //   // map.addLayer({
-    //   //   id: "symbols",
-    //   //   type: "symbol",
-    //   //   source: "route",
-    //   //   layout: {
-    //   //     "symbol-placement": "line",
-    //   //     "text-font": ["Open Sans Regular"],
-    //   //     "text-field": "{title}", // part 2 of this is how to do it
-    //   //     "text-size": 16,
-    //   //   },
-    //   // });
-    //   map.addLayer({
-    //     id: "route",
-    //     type: "line",
-    //     source: {
-    //       type: "geojson",
-    //       data: line,
-    //     },
-    //     properties: {
-    //       title: distance,
-    //     },
-    //     layout: {
-    //       "line-join": "round",
-    //       "line-cap": "round",
-    //     },
-    //     paint: {
-    //       "line-color": "red",
-    //       "line-width": 8,
-    //     },
-    //   });
-    // });
+  useEffect(() => {
+    navigator.geolocation.getCurrentPosition((pos) => {
+      setCurrentLocation([pos.coords.longitude, pos.coords.latitude]);
+    });
+  }, []);
+  console.log([].concat.apply([], currentPolygon));
+  useEffect(() => {
+    if (currentPolygon.length > 0) {
+      // const idLayer = `layer ${Math.floor(Math.random() * 1000000)}`;
+      // const idSource = `Source ${Math.floor(Math.random() * 1000000)}`;
+      // setIdLayer(idLayer);
+      // setIdSource(idSource);
+      const merged = [].concat.apply([], currentPolygon);
+      mapbox.addSource("area", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          geometry: {
+            type: "Polygon",
+            coordinates: merged,
+          },
+        },
+      });
+      mapbox.addLayer({
+        id: "layer-outline",
+        type: "line",
+        source: "area",
+        layout: {},
+        paint: {
+          "line-color": "#000",
+          "line-width": 3,
+        },
+      });
+    }
+  }, [currentPolygon]);
 
-    // // Add geolocate control to the map.
-    // const geolocate = new mapboxgl.GeolocateControl({
-    //   positionOptions: {
-    //     enableHighAccuracy: true,
-    //   },
-    //   // When active the map will receive updates to the device's location as it changes.
-    //   trackUserLocation: true,
-    //   // Draw an arrow next to the location dot to indicate which direction the device is heading.
-    //   showUserHeading: true,
-    // });
-    // map.addControl(geolocate);
-
-    // for (const feature of geojson.features) {
-    //   // create a HTML element for each feature
-    //   const el = document.createElement("div");
-    //   el.className = "marker";
-
-    //   // make a marker for each feature and add to the map
-    //   new mapboxgl.Marker(el)
-    //     .setLngLat(feature.geometry.coordinates)
-    //     .addTo(map);
-    // }
-  });
   return (
     <div>
       <div ref={mapContainer} className="map-container" />
+      <div
+        style={{
+          background: "#fff",
+          position: "fixed",
+          top: "5%",
+          left: "5%",
+          width: "20%",
+          height: "3%",
+        }}
+      >
+        {" "}
+        vi tri {locationUser?.lng} - {locationUser?.lat}
+      </div>
     </div>
   );
 }
-// const options = {
-//   enableHighAccuracy: true,
-//   maximumAge: 0,
-// };
-
-// function success(pos) {
-//   const crd = pos.coords;
-
-//   console.log("Your current position is:");
-//   console.log(`Latitude : ${crd.latitude}`);
-//   console.log(`Longitude: ${crd.longitude}`);
-//   console.log(`More or less ${crd.accuracy} meters.`);
-// }
-
-// function error(err) {
-//   console.warn(`ERROR(${err.code}): ${err.message}`);
-// }
-
-// na
-
-// navigator.geolocation.getCurrentPosition(success, error, options);
 
 export default App;
