@@ -19,7 +19,13 @@ function App() {
     [105.5929313, 20.9624033],
     [105.7724469, 21.0030936],
   ];
-
+  const fetchData = async () => {
+    const res = await fetch(
+      "https://api.mapbox.com/directions/v5/mapbox/cycling/105.5929313,20.9624033;105.7724469,21.0030936?geometries=geojson&access_token=pk.eyJ1IjoidGhhbmhudDgiLCJhIjoiY2w4dG52bDQ1MDM3YzNwbXdycnAxMDdxNSJ9.1RVa2m_pTz1_tZ-pqw6gnA"
+    );
+    console.log(res.json());
+  };
+  fetchData();
   const [locationUser, setLocationUser] = useRecoilState(locationUserState);
   // const areas = useMemo(() => {
   //   if (currentLocation.length > 0) {
@@ -289,6 +295,34 @@ function App() {
         .setLngLat(feature.geometry.coordinates)
         .addTo(map);
     }
+    const marker = new mapboxgl.Marker({
+      color: "#F84C4C", // color it red
+    });
+
+    // Define the animation.
+    function animateMarker(timestamp) {
+      const radius = 20;
+
+      /* 
+      Update the data to a new position 
+      based on the animation timestamp. 
+      The divisor in the expression `timestamp / 1000` 
+      controls the animation speed.
+      */
+      marker.setLngLat([]);
+
+      /* 
+      Ensure the marker is added to the map. 
+      This is safe to call if it's already added.
+      */
+      marker.addTo(map);
+
+      // Request the next frame of the animation.
+      requestAnimationFrame(animateMarker);
+    }
+
+    // Start the animation.
+    requestAnimationFrame(animateMarker);
     setMapbox(map);
   }, [currentLocation.length]);
 
