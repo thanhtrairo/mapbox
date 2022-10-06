@@ -9,24 +9,34 @@ import { polygonHaNoi } from "./polygon";
 import "./App.css";
 import { locationUserState } from "./recoil/locationUserState";
 import { useRecoilState } from "recoil";
+import along from "@turf/along";
 
 function App() {
+  const [locationUser, setLocationUser] = useRecoilState(locationUserState);
+
   const [currentLocation, setCurrentLocation] = useState([]);
   const [currentPolygon, setCurrentPolygon] = useState([]);
   const [currenMarker, setCurrenMarker] = useState(null);
+  const prevCurrenMarker = useRef(null);
   const [mapbox, setMapbox] = useState(null);
+  const [coordinatesMarkerAnimation, setCoordinatesMarkerAnimation] = useState(
+    []
+  );
+
   const positions = [
     [105.5929313, 20.9624033],
     [105.7724469, 21.0030936],
   ];
-  const fetchData = async () => {
-    const res = await fetch(
-      "https://api.mapbox.com/directions/v5/mapbox/cycling/105.5929313,20.9624033;105.7724469,21.0030936?geometries=geojson&access_token=pk.eyJ1IjoidGhhbmhudDgiLCJhIjoiY2w4dG52bDQ1MDM3YzNwbXdycnAxMDdxNSJ9.1RVa2m_pTz1_tZ-pqw6gnA"
-    );
-    console.log(res.json());
-  };
-  fetchData();
-  const [locationUser, setLocationUser] = useRecoilState(locationUserState);
+  useEffect(() => {
+    const fetchData = async () => {
+      const res = await fetch(
+        "https://api.mapbox.com/directions/v5/mapbox/cycling/105.5929313,20.9624033;105.7724469,21.0030936?geometries=geojson&access_token=pk.eyJ1IjoidGhhbmhudDgiLCJhIjoiY2w4dG52bDQ1MDM3YzNwbXdycnAxMDdxNSJ9.1RVa2m_pTz1_tZ-pqw6gnA"
+      );
+      const data = await res.json();
+      setCoordinatesMarkerAnimation(data.routes[0].geometry.coordinates);
+    };
+    fetchData();
+  }, []);
   // const areas = useMemo(() => {
   //   if (currentLocation.length > 0) {
   //     const polygons = polygon([
@@ -103,6 +113,82 @@ function App() {
       },
     ],
   };
+  // useEffect(() => {
+  //   mapboxgl.accessToken =
+  //     "pk.eyJ1IjoidGhhbmhudDgiLCJhIjoiY2w4dG52bDQ1MDM3YzNwbXdycnAxMDdxNSJ9.1RVa2m_pTz1_tZ-pqw6gnA";
+  //   var map = new mapboxgl.Map({
+  //     container: mapContainer.current,
+  //     style: "mapbox://styles/mapbox/streets-v11",
+  //     center: [0, 0],
+  //     zoom: 2,
+  //   });
+
+  //   var start_data = null;
+  //   var current_data = null;
+  //   var destination_data = null;
+  //   var start_time = null;
+  //   var isAnimated = false;
+
+  //   function getPointData(lngLat) {
+  //     return {
+  //       type: "Point",
+  //       coordinates: [lngLat.lng, lngLat.lat],
+  //     };
+  //   }
+
+  //   function animateMarker(tm) {
+  //     if (start_time === null) {
+  //       start_time = tm;
+  //     }
+
+  //     var zero_time = tm - start_time;
+  //     var newPoint = along(
+  //       lineString([start_data.coordinates, destination_data.coordinates]),
+  //       zero_time / 2
+  //     );
+
+  //     if (!(newPoint.geometry.coordinates == destination_data.coordinates)) {
+  //       current_data = newPoint.geometry;
+  //       map.getSource("point_source").setData(newPoint);
+  //       requestAnimationFrame(animateMarker);
+  //     } else {
+  //       isAnimated = false;
+  //       start_time = null;
+  //     }
+  //   }
+
+  //   map.on("click", function (event) {
+  //     var coordsClick = getPointData(event.lngLat);
+
+  //     if (map.getSource("point_source") && !isAnimated) {
+  //       isAnimated = true;
+  //       start_data = current_data;
+  //       destination_data = coordsClick;
+
+  //       requestAnimationFrame(animateMarker);
+  //     }
+  //     if (map.getSource("point_source") === undefined) {
+  //       current_data = coordsClick;
+  //       destination_data = coordsClick;
+
+  //       map.addSource("point_source", {
+  //         type: "geojson",
+  //         data: coordsClick,
+  //       });
+
+  //       map.addLayer({
+  //         id: "point",
+  //         source: "point_source",
+  //         type: "circle",
+  //         paint: {
+  //           "circle-radius": 10,
+  //           "circle-color": "#007cbf",
+  //         },
+  //       });
+  //     }
+  //   });
+  // }, []);
+
   useEffect(() => {
     mapboxgl.accessToken =
       "pk.eyJ1IjoidGhhbmhudDgiLCJhIjoiY2w4dG52bDQ1MDM3YzNwbXdycnAxMDdxNSJ9.1RVa2m_pTz1_tZ-pqw6gnA";
@@ -112,7 +198,6 @@ function App() {
       center: [0, 0],
       zoom: 2,
     });
-
     const geolocate = new mapboxgl.GeolocateControl({
       positionOptions: {
         enableHighAccuracy: true,
@@ -209,49 +294,6 @@ function App() {
           "text-size": 20,
         },
       });
-      // map.addLayer(
-      //   {
-      //     id: "maine",
-      //     type: "fill",
-      //     source: "maine",
-      //     paint: {
-      //       "fill-outline-color": "rgba(0,0,0,0.1)",
-      //       "fill-color": "rgba(0,0,0,0.1)",
-      //     },
-      //   },
-      //   "settlement-label"
-      // ); // Place polygon under these labels.
-
-      // map.addLayer(
-      //   {
-      //     id: "maine-highlighted",
-      //     type: "fill",
-      //     source: "maine",
-      //     paint: {
-      //       "fill-outline-color": "#484896",
-      //       "fill-color": "#6e599f",
-      //       "fill-opacity": 0.75,
-      //     },
-      //     filter: ["in", "FIPS", ""],
-      //   },
-      //   "settlement-label"
-      // ); // Place polygon under these labels.
-
-      // map.on("click", (e) => {
-      //   // Set `bbox` as 5px reactangle area around clicked point.
-      //   const bbox = [
-      //     [e.point.x - 5, e.point.y - 5],
-      //     [e.point.x + 5, e.point.y + 5],
-      //   ];
-      //   // Find features intersecting the bounding box.
-      //   const selectedFeatures = map.queryRenderedFeatures(bbox, {
-      //     layers: ["maine"],
-      //   });
-      //   const fips = selectedFeatures.map((feature) => feature.properties.FIPS);
-      //   // Set a filter matching selected features by FIPS codes
-      //   // to activate the 'maine-highlighted' layer.
-      //   map.setFilter("maine-highlighted", ["in", "FIPS", ...fips]);
-      // });
       map.on("click", function (e) {
         const features = map.queryRenderedFeatures(e.point);
 
@@ -259,10 +301,6 @@ function App() {
           .setLngLat([e.lngLat.lng, e.lngLat.lat])
           .addTo(map);
         setCurrenMarker(marker);
-        console.log(currenMarker);
-        if (currenMarker) {
-          currenMarker.remove();
-        }
         setLocationUser({
           lng: e.lngLat.lng,
           lat: e.lngLat.lat,
@@ -283,7 +321,7 @@ function App() {
     if (centerLocations) {
       const el = document.createElement("div");
       el.className = "marker";
-      const marker = new mapboxgl.Marker(el)
+      new mapboxgl.Marker(el)
         .setLngLat(centerLocations.geometry.coordinates)
         .addTo(map);
     }
@@ -300,44 +338,30 @@ function App() {
     });
 
     // Define the animation.
-    function animateMarker(timestamp) {
-      const radius = 20;
-
-      /* 
-      Update the data to a new position 
-      based on the animation timestamp. 
-      The divisor in the expression `timestamp / 1000` 
-      controls the animation speed.
-      */
-      marker.setLngLat([]);
-
-      /* 
-      Ensure the marker is added to the map. 
-      This is safe to call if it's already added.
-      */
-      marker.addTo(map);
-
-      // Request the next frame of the animation.
-      requestAnimationFrame(animateMarker);
+    let count = 0;
+    if (coordinatesMarkerAnimation.length > 0) {
+      console.log(coordinatesMarkerAnimation[count][0]);
+      // function animateMarker() {
+      //   marker.setLngLat([
+      //     coordinatesMarkerAnimation[count][0],
+      //     coordinatesMarkerAnimation[count][1],
+      //   ]);
+      //   marker.addTo(map);
+      //   count++;
+      //   requestAnimationFrame(animateMarker);
+      // }
+      // requestAnimationFrame(animateMarker);
     }
-
-    // Start the animation.
-    requestAnimationFrame(animateMarker);
     setMapbox(map);
-  }, [currentLocation.length]);
+  }, [currentLocation, coordinatesMarkerAnimation]);
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition((pos) => {
       setCurrentLocation([pos.coords.longitude, pos.coords.latitude]);
     });
   }, []);
-  console.log([].concat.apply([], currentPolygon));
   useEffect(() => {
     if (currentPolygon.length > 0) {
-      // const idLayer = `layer ${Math.floor(Math.random() * 1000000)}`;
-      // const idSource = `Source ${Math.floor(Math.random() * 1000000)}`;
-      // setIdLayer(idLayer);
-      // setIdSource(idSource);
       const merged = [].concat.apply([], currentPolygon);
       mapbox.addSource("area", {
         type: "geojson",
@@ -361,7 +385,12 @@ function App() {
       });
     }
   }, [currentPolygon]);
-
+  useEffect(() => {
+    if (currenMarker) {
+      prevCurrenMarker.current?.remove();
+    }
+    prevCurrenMarker.current = currenMarker;
+  }, [currenMarker]);
   return (
     <div>
       <div ref={mapContainer} className="map-container" />
